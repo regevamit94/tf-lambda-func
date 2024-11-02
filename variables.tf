@@ -10,8 +10,8 @@ variable vpc_name {
   description = "My VPC name"
 }
 
-variable ami-pattern {
+variable ami {
   type        = string
-  default     = ["amazon/al2023-ami-2023*-kernel-6.1-x86_64"]
+  default     = "ami-00385a401487aefa4"
   description = "description"
 }
