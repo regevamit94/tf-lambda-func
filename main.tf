@@ -39,10 +39,48 @@ module "vpc" {
   }
 }
 
+resource "aws_security_group" "my_sg" {
+  name        = "amit-security-group"
+  description = "amits hometask sg"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "amit-sg"
+  }
+}
+
+resource "tls_private_key" "my-private-key" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
+}
+
+
+resource "aws_key_pair" "my-key-pair" {
+  key_name   = "amit-keypair"
+  public_key = tls_private_key.my-private-key.public_key_openssh
+}
+
+
 resource "aws_instance" "my-ec2-inst" {
   ami           = var.ami
   instance_type = "t2.micro"
   subnet_id = module.vpc.public_subnets[0]
+  key_name = aws_key_pair.my-key-pair.key_name
+  vpc_security_group_ids = [aws_security_group.my_sg.id]
 
 
   tags = {
@@ -50,9 +88,17 @@ resource "aws_instance" "my-ec2-inst" {
   }
 }
 
+
 resource "aws_eip_association" "eip-assignment" {
   instance_id = aws_instance.my-ec2-inst.id
   allocation_id = aws_eip.my-eip.id
 }
 
 
+resource "aws_efs_file_system" "foo" {
+  creation_token = "amit-efs"
+
+  tags = {
+    Name = "amit-efs"
+  }
+}
