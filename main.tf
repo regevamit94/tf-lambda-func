@@ -74,6 +74,18 @@ resource "aws_key_pair" "my-key-pair" {
   public_key = tls_private_key.my-private-key.public_key_openssh
 }
 
+resource "aws_efs_file_system" "my-efs" {
+  creation_token = "amit-efs"
+
+  tags = {
+    Name = "amit-efs"
+  }
+}
+
+resource "aws_efs_mount_target" "efs-location" {
+  file_system_id = aws_efs_file_system.my-efs.id
+  subnet_id      = module.vpc.public_subnets[0]
+}
 
 resource "aws_instance" "my-ec2-inst" {
   ami           = var.ami
@@ -82,7 +94,13 @@ resource "aws_instance" "my-ec2-inst" {
   key_name = aws_key_pair.my-key-pair.key_name
   vpc_security_group_ids = [aws_security_group.my_sg.id]
 
-
+  user_data = <<-EOF
+              #!/bin/bash
+              yum install -y amazon-efs-utils
+              mkdir -p /efs
+              mount -t efs ${aws_efs_file_system.my-efs.id}:/ /efs
+              EOF
+              
   tags = {
     Name = "amit-instance"
   }
@@ -92,13 +110,4 @@ resource "aws_instance" "my-ec2-inst" {
 resource "aws_eip_association" "eip-assignment" {
   instance_id = aws_instance.my-ec2-inst.id
   allocation_id = aws_eip.my-eip.id
-}
-
-
-resource "aws_efs_file_system" "foo" {
-  creation_token = "amit-efs"
-
-  tags = {
-    Name = "amit-efs"
-  }
 }
