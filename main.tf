@@ -87,6 +87,8 @@ resource "aws_efs_mount_target" "efs-location" {
   subnet_id      = module.vpc.public_subnets[0]
 }
 
+
+
 resource "aws_instance" "my-ec2-inst" {
   ami           = var.ami
   instance_type = "t2.micro"
@@ -100,12 +102,46 @@ resource "aws_instance" "my-ec2-inst" {
               mkdir -p /efs
               mount -t efs ${aws_efs_file_system.my-efs.id}:/ /efs
               EOF
-              
+
   tags = {
     Name = "amit-instance"
   }
 }
 
+
+data "aws_iam_policy_document" "assume_role" {
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+resource "aws_iam_role" "iam_for_lambda" {
+  name               = "iam_for_lambda"
+  assume_role_policy = data.aws_iam_policy_document.assume_role.json
+}
+
+resource "aws_lambda_function" "my_lambda_func" {
+  function_name = "amit-lambda-function"
+  filename      = "download_from_url_lambda_file.zip"
+  role          = aws_iam_role.iam_for_lambda.arn
+  handler       = "download_from_url_lambda_file.lambda_handler"
+
+  runtime = "python3.9"
+
+  environment {
+    variables = {
+      FILE_URL = var.url
+    }
+  }
+
+}
 
 resource "aws_eip_association" "eip-assignment" {
   instance_id = aws_instance.my-ec2-inst.id

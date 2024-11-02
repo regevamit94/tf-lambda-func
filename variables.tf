@@ -13,5 +13,12 @@ variable vpc_name {
 variable ami {
   type        = string
   default     = "ami-00385a401487aefa4"
-  description = "description"
+  description = "my ami"
 }
+
+variable url {
+  type        = string
+  default     = "https://api.apis.guru/v2/providers.json"
+  description = "The file that will be downloaded with lambda function"
+}
+
