@@ -80,9 +80,10 @@ resource "aws_efs_file_system" "my-efs" {
   }
 }
 
-resource "aws_efs_mount_target" "efs-location" {
+resource "aws_efs_mount_target" "my-efs-location" {
   file_system_id = aws_efs_file_system.my-efs.id
   subnet_id      = module.vpc.private_subnets[0]
+  security_groups = [aws_security_group.my_sg.id]
 }
 
 
@@ -97,13 +98,15 @@ resource "aws_instance" "my-ec2-inst" {
   user_data = <<-EOF
               #!/bin/bash
               yum install -y amazon-efs-utils
-              mkdir -p /efs
-              mount -t efs ${aws_efs_file_system.my-efs.id}:/ /efs
+              mkdir /efs
+              sudo mount -t efs -o tls ${aws_efs_file_system.my-efs.id}:/ /efs
+              chmod o+w /efs
               EOF
 
   tags = {
     Name = "amit-instance"
   }
+  depends_on = [aws_efs_access_point.access_point_for_lambda]
 }
 
 
@@ -155,10 +158,20 @@ resource "aws_iam_role_policy" "lambda_to_vpc_policy" {
   })
 }
 
+resource "aws_iam_role_policy_attachment" "lambda_vpc_access" {
+  role       = aws_iam_role.iam_for_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+resource "aws_iam_role_policy_attachment" "efs_access" {
+  role       = aws_iam_role.iam_for_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonElasticFileSystemClientFullAccess"
+}
+
 resource "aws_efs_access_point" "access_point_for_lambda" {
   file_system_id = aws_efs_file_system.my-efs.id
   root_directory {
-    path = "/mnt/efs"
+    path = "/"
   }
 
   tags = {
@@ -171,7 +184,7 @@ resource "aws_lambda_function" "my_lambda_func" {
   filename      = "download_from_url_lambda_file.zip"
   role          = aws_iam_role.iam_for_lambda.arn
   handler       = "download_from_url_lambda_file.lambda_handler"
-  runtime = "python3.9"
+  runtime = "python3.12"
 
   file_system_config {
     arn = aws_efs_access_point.access_point_for_lambda.arn
@@ -179,7 +192,7 @@ resource "aws_lambda_function" "my_lambda_func" {
   }
 
   vpc_config {
-    subnet_ids         = module.vpc.private_subnets
+    subnet_ids         = concat(module.vpc.private_subnets, module.vpc.public_subnets)
     security_group_ids = [aws_security_group.my_sg.id]
   }
 
@@ -189,9 +202,10 @@ resource "aws_lambda_function" "my_lambda_func" {
       FILE_URL = var.url
     }
   }
-  depends_on = [aws_efs_mount_target.efs-location]
+  depends_on = [aws_efs_mount_target.my-efs-location]
 }
 
+/*
 resource "aws_apigatewayv2_api" "my_http_api" {
   name          = "amit-http-api"
   protocol_type = "HTTP"
@@ -201,28 +215,25 @@ resource "aws_apigatewayv2_api" "my_http_api" {
   }
 }
 
-# Create a Lambda Integration for the HTTP API
 resource "aws_apigatewayv2_integration" "lambda_integration" {
   api_id             = aws_apigatewayv2_api.my_http_api.id
   integration_type   = "AWS_PROXY"
   integration_uri    = aws_lambda_function.my_lambda_func.arn
-  integration_method = "POST"
+  integration_method = "GET"
 
   depends_on = [aws_lambda_function.my_lambda_func]
 }
 
-# Create a route for the HTTP API
 resource "aws_apigatewayv2_route" "my_http_api_route" {
   api_id    = aws_apigatewayv2_api.my_http_api.id
-  route_key = "POST /myendpoint" # Define the endpoint path
+  route_key = "GET /lunchmylambda" 
 
   target = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
 }
 
-# Deploy the HTTP API
 resource "aws_apigatewayv2_stage" "my_http_stage" {
   api_id = aws_apigatewayv2_api.my_http_api.id
-  name   = "prod" 
+  name   = "lunch-stage" 
 
   depends_on = [aws_apigatewayv2_route.my_http_api_route]
 }
@@ -234,5 +245,6 @@ resource "aws_lambda_permission" "allow_api_gateway" {
   function_name = aws_lambda_function.my_lambda_func.function_name
   principal     = "apigateway.amazonaws.com"
 
-  source_arn = "${aws_apigatewayv2_api.my_http_api.execution_arn}/*/*"
+  source_arn = "${aws_apigatewayv2_api.my_http_api.execution_arn}"
 }
+*/
