@@ -87,29 +87,6 @@ resource "aws_efs_mount_target" "my-efs-location" {
 }
 
 
-
-resource "aws_instance" "my-ec2-inst" {
-  ami           = var.ami
-  instance_type = "t2.micro"
-  subnet_id = module.vpc.public_subnets[0]
-  key_name = aws_key_pair.my-key-pair.key_name
-  vpc_security_group_ids = [aws_security_group.my_sg.id]
-
-  user_data = <<-EOF
-              #!/bin/bash
-              yum install -y amazon-efs-utils
-              mkdir /efs
-              sudo mount -t efs -o tls ${aws_efs_file_system.my-efs.id}:/ /efs
-              chmod o+w /efs
-              EOF
-
-  tags = {
-    Name = "amit-instance"
-  }
-  depends_on = [aws_efs_access_point.access_point_for_lambda]
-}
-
-
 data "aws_iam_policy_document" "assume_role" {
   statement {
     effect = "Allow"
@@ -185,6 +162,7 @@ resource "aws_lambda_function" "my_lambda_func" {
   role          = aws_iam_role.iam_for_lambda.arn
   handler       = "download_from_url_lambda_file.lambda_handler"
   runtime = "python3.12"
+  timeout = 10
 
   file_system_config {
     arn = aws_efs_access_point.access_point_for_lambda.arn
@@ -203,6 +181,29 @@ resource "aws_lambda_function" "my_lambda_func" {
     }
   }
   depends_on = [aws_efs_mount_target.my-efs-location]
+}
+
+
+resource "aws_instance" "my-ec2-inst" {
+  ami           = var.ami
+  instance_type = "t2.micro"
+  subnet_id = module.vpc.public_subnets[0]
+  key_name = aws_key_pair.my-key-pair.key_name
+  vpc_security_group_ids = [aws_security_group.my_sg.id]
+
+  user_data = <<-EOF
+              #!/bin/bash
+              yum install -y amazon-efs-utils
+              mkdir /efs
+              sleep 15
+              sudo mount -t efs -o tls ${aws_efs_file_system.my-efs.id}:/ /efs
+              chmod o+w /efs
+              EOF
+
+  tags = {
+    Name = "amit-instance"
+  }
+  depends_on = [aws_efs_file_system.my-efs, aws_efs_mount_target.my-efs-location]
 }
 
 /*
