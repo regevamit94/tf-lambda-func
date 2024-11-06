@@ -1,5 +1,3 @@
-# tf-lambda-func
-
 # AWS Lambda and EC2 with EFS and VPC Setup using Terraform
 
 This Terraform project deploys an AWS environment with the following resources:
